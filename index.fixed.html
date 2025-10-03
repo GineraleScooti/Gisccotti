@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>لعبة المليون — 18 قطاع</title>
+
+<style>
+:root{ --bg-image: url('./assets/bg.jpg') !important; }
+
+/* خلفية عامة ثابتة */
+html, body{
+  margin:0; padding:0; width:100%; height:100%;
+  overflow-x:hidden; color:#fff;
+  background:#04142c no-repeat center center fixed !important;
+  background-image:var(--bg-image) !important;
+  background-size:cover !important;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,'Noto Kufi Arabic','Geeza Pro',sans-serif;
+}
+html::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:rgba(0,0,0,.25);}
+
+/* الحاوية */
+.app{max-width:520px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:16px;box-sizing:border-box;}
+.screen{display:none;width:100%} .screen.active{display:block}
+
+/* صندوق السؤال */
+.question-wrap{ position:relative; margin-bottom:12px; }
+#qCounter{opacity:.95;font-size:15px;margin:6px 0 10px;text-align:center;font-weight:700}
+.question-box{
+  position: relative;
+  z-index: 1;
+  overflow: visible;
+  background:rgba(255,255,255,.10); border:2px solid #fff; border-radius:12px;
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  padding:14px; font-size:22px; min-height:64px; display:flex; align-items:center; justify-content:center; text-align:center;
+}
+
+/* عدّادا الصح والخطأ */
+.badge{
+  position:absolute; top:-10px !important;
+  width:36px !important; height:36px !important; line-height:36px !important;
+  border-radius:8px !important; border:2px solid #ffffff !important;
+  display:flex !important; align-items:center !important; justify-content:center !important;
+  font-size:16px !important; font-weight:900 !important; color:#fff !important;
+  box-shadow:0 2px 6px rgba(0,0,0,.35) !important;
+  background:rgba(255,255,255,0.12) !important;
+  backdrop-filter:blur(6px) !important; -webkit-backdrop-filter:blur(6px) !important;
+  z-index:5 !important;
+}
+#errorBadge{ right:8px !important; background:rgba(224,41,41,.9) !important; }
+#goodBadge{  left:8px  !important; background:rgba(31,170,64,.9)  !important; }
+
+/* الإجابات 2×2 */
+.answers{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+.answer{
+  background:rgba(255,255,255,.10); border:2px solid #fff; border-radius:12px;
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  padding:14px; font-size:20px; min-height:64px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  transition:transform .05s, background .15s, border-color .15s;
+}
+.answer strong{margin-inline-end:8px;opacity:.95;font-weight:900}
+.answer:active{transform:scale(.985)}
+.answer.correct{background:rgba(0,180,0,.85);border-color:#fff}
+.answer.wrong  {background:rgba(200,0,0,.85);border-color:#fff}
+
+/* صف الأزرار والموقّت */
+.footer{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:16px;width:100%;}
+.control-btn,#timerBtn{
+  background:rgba(255,255,255,.10); border:2px solid #fff; border-radius:12px;
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  min-height:64px; display:flex; align-items:center; justify-content:center;
+  font-weight:900; cursor:pointer; color:#fff; text-align:center;
+}
+.control-btn.used{opacity:.38; pointer-events:none; filter:saturate(.6)}
+#timerBtn{font-size:22px;color:#FFF36C;text-shadow:0 2px 4px rgba(0,0,0,.45)}
+
+/* العجلة */
+.wheel-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;margin:24px 0 12px;}
+#wheelCanvas{width:400px;height:400px;max-width:94vw;display:block;background:transparent;}
+.pointer{width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-top:18px solid #FFF36C;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35));margin-bottom:-2px;}
+.quiz-wrap{display:none}.quiz-wrap.active{display:block}.wheel-wrap.active{display:flex}
+
+/* نافذة سمير الليل */
+.modal-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,.45);
+  display:none; align-items:flex-start; justify-content:flex-start; z-index:999;
+}
+.modal{
+  position:absolute; box-sizing:border-box; background:#1a0d12; border:2px solid #b30021; border-radius:14px; padding:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.5); display:flex; flex-direction:column; justify-content:flex-start;
+}
+.modal h3{margin:0 0 6px;text-align:center;color:#fff;font-size:22px;font-weight:900;}
+.modal .riddle{
+  background:#2a0f18; border:1px solid #b30021; border-radius:10px; padding:14px;
+  text-align:center; line-height:1.75; font-size:19px; flex:1; overflow:auto; margin:0;
+}
+.modal .countdown{margin-top:8px;text-align:center;font-weight:900;font-size:20px;color:#FFF36C;}
+.modal .hint{margin-top:6px;text-align:center;font-size:12px;opacity:.8;}
+
+*{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <section id="screenGame" class="screen active">
+
+    <!-- العجلة -->
+    <div id="wheelSection" class="wheel-wrap active">
+      <div class="pointer" id="pointerEl"></div>
+      <canvas id="wheelCanvas" aria-label="العجلة (انقر لتدور)"></canvas>
+    </div>
+
+    <!-- الأسئلة -->
+    <div id="quizSection" class="quiz-wrap">
+      <div class="question-wrap">
+        <div id="errorBadge" class="badge">0</div>
+        <div id="goodBadge"  class="badge">0</div>
+        <div id="qCounter"></div>
+        <div class="question-box" id="qBox">—</div>
+      </div>
+
+      <div class="answers" id="answers"></div>
+
+      <div class="footer">
+        <div class="control-btn" id="audienceBtn">الجمهور</div>
+        <div class="control-btn" id="switchBtn">تبديل</div>
+        <button class="control-btn" id="timerBtn">07:00</button>
+        <div class="control-btn" id="fiftyBtn">50/50</div>
+        <div class="control-btn" id="nextBtn">التالي</div>
+      </div>
+    </div>
+
+  </section>
+</div>
+
+<!-- نافذة سمير الليل -->
+<div id="riddleModal" class="modal-overlay">
+  <div class="modal" id="riddleModalBox">
+    <h3>سمير الليل</h3>
+    <div id="riddleText" class="riddle">—</div>
+    <div id="riddleCountdown" class="countdown">05:00</div>
+    <div class="hint">سيتم إعادة لف العجلة تلقائيًا بعد انتهاء الوقت</div>
+  </div>
+</div>
+
+<script>
+/* ====== DOM ====== */
+const wheelCanvas=document.getElementById("wheelCanvas");
+const ctx=wheelCanvas.getContext("2d");
+const pointerEl=document.getElementById("pointerEl");
+const wheelSection=document.getElementById('wheelSection');
+const quizSection=document.getElementById('quizSection');
+const qBox=document.getElementById('qBox');
+const answersDiv=document.getElementById('answers');
+const qCounter=document.getElementById('qCounter');
+
+const nextBtn=document.getElementById('nextBtn');
+const fiftyBtn=document.getElementById('fiftyBtn');
+const switchBtn=document.getElementById('switchBtn');
+const audienceBtn=document.getElementById('audienceBtn');
+const timerBtn=document.getElementById('timerBtn');
+
+const goodBadge=document.getElementById('goodBadge');
+const errorBadge=document.getElementById('errorBadge');
+
+/* ====== إعداد العجلة: 15 تصنيف + 3 سمير الليل = 18 قطاع ====== */
+const dpr=window.devicePixelRatio||1, baseSize=400;
+wheelCanvas.width=baseSize*dpr; wheelCanvas.height=baseSize*dpr;
+wheelCanvas.style.width=baseSize+"px"; wheelCanvas.style.height=baseSize+"px";
+ctx.setTransform(dpr,0,0,dpr,0,0);
+
+const baseCats = [
+  "التاريخ","الجغرافيا","الطبيعة","الأدب العربي","الفلك",
+  "الرياضة","النباتات","السينما","الموسيقى",
+  "الأحياء","المعمار","الحيوانات","ثقافة عامة","الاجتماع","الفيزياء"
+];
+const SPECIAL = "سمير الليل";
+const SPECIAL_REPEAT = 3;
+
+function buildSectors(base, specialLabel, repeat){
+  const total = base.length + repeat;   // 18
+  const sectors = new Array(total).fill(null);
+  // وزّع سمير الليل بالتساوي (0, 6, 12)
+  for(let i=0;i<repeat;i++){
+    sectors[Math.floor(i * total / repeat)] = specialLabel;
+  }
+  // املأ باقي الخانات
+  let j=0;
+  for(let k=0;k<total;k++){
+    if(sectors[k]==null){ sectors[k]=base[j % base.length]; j++; }
+  }
+  return sectors;
+}
+
+const categories = buildSectors(baseCats, SPECIAL, SPECIAL_REPEAT);
+const total = categories.length;               // 18
+const arc = 2*Math.PI/total;
+
+let lastAngle=0;
+function drawWheel(angle=0){
+  const R = baseSize/2;
+  ctx.clearRect(0,0,baseSize,baseSize);
+  for(let i=0;i<total;i++){
+    const isSpecial = categories[i] === SPECIAL;
+    ctx.beginPath();
+    ctx.fillStyle = isSpecial ? "#b30021" : (i%2===0 ? "#0b2b4f" : "#0f355f");
+    ctx.moveTo(R,R);
+    ctx.arc(R,R,R, i*arc+angle, (i+1)*arc+angle);
+    ctx.fill();
+
+    ctx.save();
+    ctx.translate(R,R);
+    ctx.rotate(i*arc + arc/2 + angle);
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillStyle="#fff";
+    ctx.strokeStyle="rgba(0,0,0,.55)";
+    ctx.lineWidth=2; ctx.shadowColor="rgba(0,0,0,.6)"; ctx.shadowBlur=2;
+    ctx.font="bold 15px Arial";
+    const label = categories[i];
+    const rText = baseSize*0.34;
+    ctx.strokeText(label, rText, 0);
+    ctx.fillText(label,  rText, 0);
+    ctx.restore();
+  }
+  lastAngle=angle;
+}
+drawWheel();
+
+/* ====== دالة دقيقة لتحديد القطاع تحت رأس السهم ====== */
+function getHitIndex(angle){
+  const TAU = 2*Math.PI;
+  const norm = x => (x % TAU + TAU) % TAU;
+  const pointer = norm(-Math.PI/2);   // رأس السهم للأعلى (−90°)
+  const a = norm(pointer - angle);    // زاوية رأس السهم داخل العجلة بعد الدوران
+  return Math.floor(a / arc) % total; // أي قطاع يحتوي هذه الزاوية
+}
+
+/* ====== دوران 10 ثوانٍ + إظهار اللغز فقط بعد التوقف ====== */
+let spinning=false;
+wheelCanvas.addEventListener('click',()=>{ if(!spinning) startSpin(); });
+
+function startSpin(){
+  spinning=true;
+  const duration=10000; // 10s
+  const targetAngle = Math.random()*2*Math.PI + 10*Math.PI;
+  const start=performance.now();
+  const easeOut = t => 1 - Math.pow(1-t,5);
+
+  function animate(t){
+    const p=Math.min(1,(t-start)/duration);
+    drawWheel(targetAngle*easeOut(p));
+    if(p<1){ requestAnimationFrame(animate); }
+    else{
+      spinning=false;
+      const angle = targetAngle % (2*Math.PI);
+      const idx = getHitIndex(angle);
+      const category = categories[idx];
+      if(category===SPECIAL){ showRiddle(); }
+      else { startCategory(category); }
+    }
+  }
+  requestAnimationFrame(animate);
+}
+
+/* ====== نافذة سمير الليل (ألغاز بدون تكرار متتالٍ) ====== */
+const riddleModal=document.getElementById('riddleModal');
+const riddleModalBox=document.getElementById('riddleModalBox');
+const riddleText=document.getElementById('riddleText');
+const riddleCountdown=document.getElementById('riddleCountdown');
+
+const riddles=[
+  "شيء إذا أكلته كله لا تستفيد، وإذا أكلت نصفه تستفيد؟",
+  "يمشي بلا قدمين ويبكي بلا عينين، ما هو؟",
+  "له رقبة بلا رأس، ما هو؟",
+  "ما هو الشيء الذي كلما أخذت منه كبر؟",
+  "تراني ولا أراك، ومن ورائي أراك، فمن أنا؟"
+];
+
+// ترتيب عشوائي بدون تكرار مباشر
+let riddleOrder = [];
+let riddlePtr = 0;
+let lastRiddleIndex = -1;
+
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]]=[arr[j],arr[i]];
+  }
+  return arr;
+}
+
+function refillRiddleOrder(){
+  const n = riddles.length;
+  const indices = [...Array(n).keys()];
+  shuffle(indices);
+  // تجنّب أن يكون أول عنصر مساويًا لآخر لغز ظهر
+  if(indices[0] === lastRiddleIndex && n > 1){
+    // بدّل الأول مع أي موضع آخر
+    const swapWith = 1 + Math.floor(Math.random()*(n-1));
+    [indices[0], indices[swapWith]] = [indices[swapWith], indices[0]];
+  }
+  riddleOrder = indices;
+  riddlePtr = 0;
+}
+
+refillRiddleOrder();
+
+let rremain=300, rint=null;
+
+function positionRiddle(){
+  const c=wheelCanvas.getBoundingClientRect();
+  const p=pointerEl.getBoundingClientRect();
+  const top=Math.round(p.bottom+window.scrollY);
+  const bottom=Math.round(c.bottom+window.scrollY);
+  const left=Math.round(c.left+window.scrollX);
+  const width=Math.round(c.width);
+  const height=Math.max(120, bottom-top);
+  riddleModalBox.style.top=top+"px";
+  riddleModalBox.style.left=left+"px";
+  riddleModalBox.style.width=width+"px";
+  riddleModalBox.style.height=height+"px";
+}
+
+window.addEventListener('resize',()=>{ if(riddleModal.style.display==='flex') positionRiddle(); });
+
+function showRiddle(){
+  // إذا خلصنا القائمة، املأها من جديد وتجنّب تكرار آخر لغز مباشرة
+  if(riddlePtr >= riddleOrder.length){
+    refillRiddleOrder();
+  }
+  const idx = riddleOrder[riddlePtr++];
+  lastRiddleIndex = idx;
+
+  riddleText.textContent = riddles[idx];
+  rremain=300; updateRiddleClock();
+  if(rint) clearInterval(rint);
+  riddleModal.style.display="flex";
+  positionRiddle();
+  rint=setInterval(()=>{ if(rremain>0){ rremain--; updateRiddleClock(); } else { closeRiddle(); } },1000);
+}
+
+function updateRiddleClock(){
+  const m=String(Math.floor(rremain/60)).padStart(2,'0');
+  const s=String(rremain%60).padStart(2,'0');
+  riddleCountdown.textContent=`${m}:${s}`;
+}
+function closeRiddle(){
+  clearInterval(rint); rint=null; riddleModal.style.display="none";
+}
+
+/* ====== بنك أسئلة مبسّط ====== */
+const pool= {
+  "التاريخ": [
+    {"text":"في أي عام سقطت الدولة العباسية في بغداد على يد المغول؟","options":["1258","1212","1312","1401"],"correct":0},
+    {"text":"من هو مؤسس الدولة الأموية؟","options":["معاوية بن أبي سفيان","يزيد بن معاوية","عبد الملك بن مروان","عثمان بن عفان"],"correct":0},
+    {"text":"الحملة الصليبية الأولى انطلقت سنة؟","options":["1096","1187","1147","1204"],"correct":0},
+    {"text":"من القائد الذي انتصر في معركة حطين سنة 1187م؟","options":["صلاح الدين الأيوبي","نور الدين زنكي","قطز","بايزيد"],"correct":0},
+    {"text":"أول عاصمة للخلافة العباسية كانت؟","options":["الأنبار","بغداد","الكوفة","دمشق"],"correct":0},
+    {"text":"في أي عام وقعت معركة عين جالوت؟","options":["1260","1250","1291","1300"],"correct":0},
+    {"text":"من هو أول الخلفاء الراشدين؟","options":["أبو بكر الصديق","عمر بن الخطاب","علي بن أبي طالب","عثمان بن عفان"],"correct":0},
+    {"text":"من الذي قاد الفتح الإسلامي للأندلس؟","options":["طارق بن زياد","موسى بن نصير","عبد الرحمن الداخل","الحجاج بن يوسف"],"correct":0},
+    {"text":"في أي عام اندلعت الثورة الفرنسية؟","options":["1789","1776","1815","1848"],"correct":0},
+    {"text":"من كان أول رئيس للولايات المتحدة الأمريكية؟","options":["جورج واشنطن","توماس جيفرسون","أبراهام لينكولن","جون آدامز"],"correct":0},
+    {"text":"في أي مدينة وُقّع ميثاق الأمم المتحدة سنة 1945؟","options":["سان فرانسيسكو","نيويورك","جنيف","واشنطن"],"correct":0},
+    {"text":"من هو أول خليفة عباسي؟","options":["أبو العباس السفاح","أبو جعفر المنصور","هارون الرشيد","المعتصم"],"correct":0},
+    {"text":"معركة ملاذكرد سنة 1071 كانت بين السلاجقة و…؟","options":["البيزنطيين","المغول","الصليبيين","الفاطميين"],"correct":0},
+    {"text":"من هو السلطان العثماني الذي فتح القسطنطينية؟","options":["محمد الفاتح","سليم الأول","سليمان القانوني","مراد الثاني"],"correct":0},
+    {"text":"في أي عام بدأت الحرب العالمية الأولى؟","options":["1914","1918","1939","1945"],"correct":0}
+  ],
+  "الجغرافيا": [
+    {"text":"أعلى جبل في العالم هو؟","options":["إيفرست","كي2","ماكينلي","مون بلان"],"correct":0},
+    {"text":"أطول نهر في العالم؟","options":["النيل","الأمازون","اليانغتسي","الدانوب"],"correct":0},
+    {"text":"في أي قارة تقع صحراء كالاهاري؟","options":["أفريقيا","آسيا","أمريكا الجنوبية","أستراليا"],"correct":0},
+    {"text":"أكبر محيط على سطح الأرض؟","options":["الهادئ","الأطلسي","الهندي","المتجمد الشمالي"],"correct":0},
+    {"text":"عاصمة كازاخستان الحالية؟","options":["أستانا","ألماتي","طشقند","باكو"],"correct":0},
+    {"text":"أي دولة تسمى أرض الفجر المشرق؟","options":["اليابان","الصين","كوريا الجنوبية","فيتنام"],"correct":0},
+    {"text":"أطول سلسلة جبلية في العالم؟","options":["الأنديز","الهيمالايا","الأطلس","الروكي"],"correct":0},
+    {"text":"الدولة العربية الأصغر مساحة؟","options":["البحرين","قطر","جزر القمر","الكويت"],"correct":0},
+    {"text":"ما هي عاصمة نيجيريا؟","options":["أبوجا","لاغوس","أكرا","داكار"],"correct":0},
+    {"text":"أكبر جزيرة في العالم؟","options":["غرينلاند","مدغشقر","بورنيو","كاليمانتان"],"correct":0},
+    {"text":"كم عدد الدول العربية في قارة أفريقيا؟","options":["10","12","8","14"],"correct":0},
+    {"text":"أين يقع نهر السين؟","options":["فرنسا","ألمانيا","سويسرا","بلجيكا"],"correct":0},
+    {"text":"أي بحر يُطلق عليه بحر القمر؟","options":["الكاريبي","الأبيض المتوسط","الأسود","الهندي"],"correct":0},
+    {"text":"عاصمة بوليفيا؟","options":["لاباز","كيتو","بوغوتا","ليما"],"correct":0},
+    {"text":"أين يقع جبل فوجي؟","options":["اليابان","الصين","كوريا","منغوليا"],"correct":0}
+  ],
+  "الفلك": [
+    {"text":"أقرب كوكب إلى الشمس؟","options":["عطارد","الزهرة","الأرض","المريخ"],"correct":0},
+    {"text":"كم عدد كواكب المجموعة الشمسية بعد إعادة تصنيف بلوتو؟","options":["8","9","7","6"],"correct":0},
+    {"text":"الكوكب المعروف بالكوكب الأحمر؟","options":["المريخ","عطارد","المشتري","زحل"],"correct":0},
+    {"text":"ما اسم أكبر كوكب في المجموعة الشمسية؟","options":["المشتري","زحل","أورانوس","نبتون"],"correct":0},
+    {"text":"أقرب نجم إلى الأرض بعد الشمس؟","options":["بروكسيما سنتوري","بيتا الجبار","فيغا","سيريوس"],"correct":0},
+    {"text":"المجرة التي تحتوي على نظامنا الشمسي؟","options":["درب التبانة","المرأة المسلسلة","سحابة ماجلان","مجرة مثلثة"],"correct":0},
+    {"text":"أي كوكب له حلقات بارزة؟","options":["زحل","المشتري","أورانوس","نبتون"],"correct":0},
+    {"text":"كم مدة دوران الأرض حول الشمس؟","options":["365 يوم","360 يوم","400 يوم","300 يوم"],"correct":0},
+    {"text":"من اكتشف قوانين حركة الكواكب؟","options":["يوهانس كبلر","نيوتن","جاليليو","أرسطو"],"correct":0},
+    {"text":"ما هي أكبر أقمار كوكب المشتري؟","options":["جانيميد","آيو","يوروبا","كالستو"],"correct":0},
+    {"text":"الظاهرة التي يختفي فيها القمر خلف الأرض تسمى؟","options":["خسوف القمر","كسوف الشمس","شهاب","مذنب"],"correct":0},
+    {"text":"اسم أول إنسان صعد إلى الفضاء؟","options":["يوري جاجارين","نيل آرمسترونغ","فالنتينا تيريشكوفا","باز ألدرين"],"correct":0},
+    {"text":"ما هو اسم أول قمر صناعي أُطلق إلى الفضاء؟","options":["سبوتنيك 1","أبولو 11","فالكون 9","مير"],"correct":0},
+    {"text":"كم عدد أقمار كوكب المريخ؟","options":["2","1","4","5"],"correct":0},
+    {"text":"أي كوكب يُعرف بالكوكب الأزرق؟","options":["الأرض","نبتون","أورانوس","الزهرة"],"correct":0}
+  ],
+  "الأحياء": [
+    {"text":"الوحدة الأساسية لبناء الكائنات الحية؟","options":["الخلية","النسيج","العضو","النظام"],"correct":0},
+    {"text":"أي جزء من الخلية يحتوي على المعلومات الوراثية؟","options":["النواة","السيتوبلازم","الغشاء الخلوي","الميتوكوندريا"],"correct":0},
+    {"text":"أي فيتامين يُنتج عند تعرض الجلد للشمس؟","options":["فيتامين D","فيتامين C","فيتامين A","فيتامين K"],"correct":0},
+    {"text":"عدد الكروموسومات في الخلية البشرية؟","options":["46","44","48","23"],"correct":0},
+    {"text":"العملية التي يتحول فيها الجلوكوز إلى طاقة تسمى؟","options":["التنفس الخلوي","البناء الضوئي","التخمير","الأكسدة"],"correct":0},
+    {"text":"أي كائن حي يُعد من بدائيات النوى؟","options":["البكتيريا","الفطريات","الطحالب","الإنسان"],"correct":0},
+    {"text":"أكبر عضو في جسم الإنسان؟","options":["الجلد","الكبد","القلب","الرئتان"],"correct":0},
+    {"text":"أي حيوان له أطول فترة حمل؟","options":["الفيل","الحوت الأزرق","الزرافة","الحصان"],"correct":0},
+    {"text":"أين تتم عملية البناء الضوئي في النبات؟","options":["البلاستيدات الخضراء","النواة","الميتوكوندريا","الغشاء"],"correct":0},
+    {"text":"أي جهاز في الجسم مسؤول عن ضخ الدم؟","options":["القلب","الكبد","الرئتان","الكلى"],"correct":0},
+    {"text":"كم عدد الأسنان الدائمة عند الإنسان البالغ؟","options":["32","30","28","36"],"correct":0},
+    {"text":"أي نوع من الدم يمكنه التبرع لجميع الفصائل؟","options":["O سالب","AB موجب","A موجب","B موجب"],"correct":0},
+    {"text":"ما اسم الغاز الذي تتنفسه الكائنات الحية للبقاء؟","options":["الأكسجين","ثاني أكسيد الكربون","النيتروجين","الهيدروجين"],"correct":0},
+    {"text":"أي نوع من الخلايا مسؤول عن نقل الأكسجين في الدم؟","options":["كريات الدم الحمراء","كريات الدم البيضاء","الصفائح الدموية","البلازما"],"correct":0},
+    {"text":"ما اسم العظم الأطول في جسم الإنسان؟","options":["عظم الفخذ","عظم الساق","عظم العضد","عظم الحوض"],"correct":0}
+  ],
+  " المعمار ": [
+    {"text":"الجامع الأموي في دمشق بُني في عهد؟","options":["الوليد بن عبد الملك","عبد الملك بن مروان","معاوية بن أبي سفيان","عمر بن عبد العزيز"],"correct":0},
+    {"text":"جامع القيروان في تونس أسسه؟","options":["عقبة بن نافع","يوسف بن تاشفين","عبد الرحمن الداخل","المنصور الموحدي"],"correct":0},
+    {"text":"قصر الحمراء في غرناطة شيده؟","options":["بنو الأحمر","المرابطون","الفاطميون","العباسيون"],"correct":0},
+    {"text":"قبة الصخرة بُنيت في عهد؟","options":["عبد الملك بن مروان","الوليد بن عبد الملك","عمر بن الخطاب","صلاح الدين الأيوبي"],"correct":0},
+    {"text":"ما الطراز المعماري الذي يظهر في الأندلس الإسلامية؟","options":["الطراز الموريسكي","الطراز الفاطمي","الطراز العباسي","الطراز السلجوقي"],"correct":0},
+    {"text":"الجامع الأزهر في القاهرة بُني على يد؟","options":["الفاطميين","الأيوبيين","المماليك","العباسيين"],"correct":0},
+    {"text":"مسجد الزيتونة في تونس بُني في؟","options":["القرن الثامن","القرن التاسع","القرن العاشر","القرن الحادي عشر"],"correct":0},
+    {"text":"قلعة صلاح الدين بالقاهرة شيدها؟","options":["صلاح الدين الأيوبي","قلاوون","بيبرس","محمد علي"],"correct":0},
+    {"text":"جامع السلطان أحمد في إسطنبول يعرف بـ؟","options":["المسجد الأزرق","الجامع الكبير","الجامع الأموي","مسجد السليمانية"],"correct":0},
+    {"text":"مدينة فاس بالمغرب أسسها؟","options":["إدريس الثاني","يوسف بن تاشفين","يعقوب المنصور","الحسن الأول"],"correct":0},
+    {"text":"من أهم معالم العمارة العثمانية في إسطنبول؟","options":["مسجد السليمانية","قصر توبكابي","جامع الزيتونة","الأزهر"],"correct":0},
+    {"text":"سور القاهرة بُني في عهد؟","options":["جوهر الصقلي","صلاح الدين الأيوبي","الظاهر بيبرس","محمد علي"],"correct":0},
+    {"text":"الجامع الكبير في صنعاء بُني في؟","options":["القرن السابع","القرن الثامن","القرن التاسع","القرن العاشر"],"correct":0},
+    {"text":"جامع الكتبية في مراكش بناه؟","options":["الموحدون","المرابطون","المرينيون","السعديون"],"correct":0},
+    {"text":"ما الطراز الذي يتجلى في عمارة سامراء العباسية؟","options":["الطراز الحلزوني","الطراز المملوكي","الطراز الأموي","الطراز العثماني"],"correct":0}
+  ],
+  "الاجتماع": [
+    {"text":"مؤسس علم الاجتماع؟","options":["ابن خلدون","أرسطو","دوركايم","ماكس فيبر"],"correct":0},
+    {"text":"كتاب المقدمة ألفه؟","options":["ابن خلدون","الغزالي","الفارابي","ابن رشد"],"correct":0},
+    {"text":"من رواد النظرية الوظيفية في علم الاجتماع؟","options":["إميل دوركايم","كارل ماركس","ماكس فيبر","أوجست كونت"],"correct":0},
+    {"text":"من نظرية الصراع الاجتماعي؟","options":["كارل ماركس","ماكس فيبر","دوركايم","هربرت سبنسر"],"correct":0},
+    {"text":"علم الاجتماع ظهر كعلم مستقل في؟","options":["القرن التاسع عشر","القرن السابع عشر","القرن الثامن عشر","القرن العشرين"],"correct":0},
+    {"text":"من أسس النظرية البيروقراطية؟","options":["ماكس فيبر","أرسطو","دوركايم","ماركس"],"correct":0},
+    {"text":"أي عالم صاغ مصطلح اللامعيارية (Anomie)؟","options":["دوركايم","ابن خلدون","سبنسر","كونت"],"correct":0},
+    {"text":"من هو مؤسس النظرية التفاعلية الرمزية؟","options":["جورج ميد","ماكس فيبر","دوركايم","بارسونز"],"correct":0},
+    {"text":"العالم الذي ربط بين البروتستانتية والرأسمالية؟","options":["ماكس فيبر","ماركس","دوركايم","كونت"],"correct":0},
+    {"text":"مصطلح التضامن الميكانيكي استخدمه؟","options":["دوركايم","فيبر","ماركس","كونت"],"correct":0},
+    {"text":"كتاب رأس المال كتبه؟","options":["كارل ماركس","فيبر","دوركايم","إنجلز"],"correct":0},
+    {"text":"من أوائل من تحدث عن الدورة التاريخية للحضارات؟","options":["ابن خلدون","الغزالي","أرسطو","أفلاطون"],"correct":0},
+    {"text":"الوظيفة الاجتماعية تعني؟","options":["دور الشيء في المجتمع","أصله التاريخي","قيمته الاقتصادية","تأثيره الفردي"],"correct":0},
+    {"text":"مفهوم الاغتراب ارتبط بـ؟","options":["كارل ماركس","ماكس فيبر","دوركايم","ابن خلدون"],"correct":0},
+    {"text":"من أول من استخدم مصطلح سوسيولوجيا؟","options":["أوجست كونت","دوركايم","فيبر","ماركس"],"correct":0}
+  ],
+  "النباتات": [
+    {"text":"أي جزء من النبات مسؤول عن امتصاص الماء؟","options":["الجذور","الساق","الأوراق","الزهور"],"correct":0},
+    {"text":"ما العملية التي تنتج الغذاء في النباتات؟","options":["البناء الضوئي","التنفس","التبخر","التمثيل الغذائي"],"correct":0},
+    {"text":"أي غاز تأخذه النباتات أثناء البناء الضوئي؟","options":["ثاني أكسيد الكربون","الأكسجين","النيتروجين","الهيدروجين"],"correct":0},
+    {"text":"المادة الخضراء في النبات تسمى؟","options":["الكلوروفيل","السليلوز","النشا","اللجنين"],"correct":0},
+    {"text":"أي نبات يُعرف بملك الغابات؟","options":["البلوط","الصنوبر","الأرز","السنديان"],"correct":0},
+    {"text":"ما الجزء المسؤول عن نقل الغذاء في النبات؟","options":["اللحاء","الخشب","الجذور","الأوراق"],"correct":0},
+    {"text":"أكبر زهرة في العالم؟","options":["رافليسيا","زنبق الماء","عباد الشمس","التوليب"],"correct":0},
+    {"text":"نبات يستخدم لصناعة المطاط الطبيعي؟","options":["الهيفيا","القطن","الكتان","النخيل"],"correct":0},
+    {"text":"أي نبات يطلق عليه خبز الفقراء؟","options":["البطاطس","القمح","الذرة","الأرز"],"correct":0},
+    {"text":"النباتات التي تنمو في الصحراء تسمى؟","options":["نباتات جفافية","نباتات مائية","نباتات ظل","نباتات جبلية"],"correct":0},
+    {"text":"أي جزء من النبات يتحول إلى ثمرة؟","options":["المبيض","الساق","الجذر","الورقة"],"correct":0},
+    {"text":"نبات يستعمل لإنتاج السكر؟","options":["قصب السكر","الشمندر","الذرة","القمح"],"correct":0},
+    {"text":"أي نبات يُعتبر مصدر القهوة؟","options":["البن","الكاكاو","الشاي","التمر"],"correct":0},
+    {"text":"أي نبات طبي لتهدئة الحروق؟","options":["الألوفيرا","النعناع","الزعتر","إكليل الجبل"],"correct":0},
+    {"text":"نبات ينتج بذور زيتية مهمة؟","options":["عباد الشمس","الشعير","العدس","الحمص"],"correct":0}
+  ],
+  "الفيزياء": [
+    {"text":"ما هو رمز سرعة الضوء في الفيزياء؟","options":["c","v","λ","E"],"correct":0},
+    {"text":"وحدة قياس المقاومة الكهربائية؟","options":["الأوم","الفولت","الأمبير","الواط"],"correct":0},
+    {"text":"أي جسيم مسؤول عن الشحنة السالبة؟","options":["الإلكترون","البروتون","النيوترون","الفوتون"],"correct":0},
+    {"text":"مبدأ أرخميدس يفسر؟","options":["الطفو","الانكسار","التوصيل","المغناطيسية"],"correct":0},
+    {"text":"العالم الذي صاغ قوانين الحركة الثلاثة؟","options":["نيوتن","غاليليو","كبلر","فاراداي"],"correct":0},
+    {"text":"أي نوع من الموجات يحتاج وسطًا ماديًا للانتشار؟","options":["الصوتية","الكهرومغناطيسية","الضوء","الراديو"],"correct":0},
+    {"text":"وحدة قياس الطاقة؟","options":["الجول","النيوتن","الكلفن","الباسكال"],"correct":0},
+    {"text":"سرعة الصوت في الهواء تقريبًا عند 20° م؟","options":["343 م/ث","1500 م/ث","100 م/ث","500 م/ث"],"correct":0},
+    {"text":"مبدأ هايزنبرغ يخص؟","options":["عدم اليقين","النسبية","الكهرومغناطيسية","الديناميكا الحرارية"],"correct":0},
+    {"text":"أول من استعمل البندول لقياس الزمن؟","options":["غاليليو","نيوتن","أرخميدس","بلانك"],"correct":0},
+    {"text":"ما اسم القوة التي تحفظ الأجسام في مدارها حول الأرض؟","options":["الجاذبية","الطرد المركزي","الكهرومغناطيسية","النابضية"],"correct":0},
+    {"text":"أي ظاهرة تفسر تكوّن قوس قزح؟","options":["الانكسار","الانعكاس","الحيود","التداخل"],"correct":0},
+    {"text":"ما الجسيمات التي تحمل القوة الكهرومغناطيسية؟","options":["الفوتونات","الغلوونات","الإلكترونات","النيوترونات"],"correct":0},
+    {"text":"وحدة قياس القدرة الكهربائية؟","options":["الواط","الأمبير","الجول","النيوتن"],"correct":0},
+    {"text":"من مكتشف الأشعة السينية؟","options":["رونتغن","كوري","فاراداي","أينشتاين"],"correct":0}
+  ],
+  "الرياضة": [
+    {"text":"كم عدد لاعبي فريق كرة القدم الأساسيين؟","options":["11","10","12","9"],"correct":0},
+    {"text":"الدولة التي استضافت أول كأس عالم 1930؟","options":["الأوروغواي","البرازيل","إيطاليا","الأرجنتين"],"correct":0},
+    {"text":"عدد أشواط مباراة كرة السلة؟","options":["4","2","3","5"],"correct":0},
+    {"text":"كم عدد الحلقات في شعار الأولمبياد؟","options":["5","6","4","7"],"correct":0},
+    {"text":"ما الرياضة التي تُعرف بأم الألعاب؟","options":["ألعاب القوى","الجمباز","المصارعة","السباحة"],"correct":0},
+    {"text":"أي لاعب يُلقب بالظاهرة؟","options":["رونالدو البرازيلي","ميسي","زيدان","بيليه"],"correct":0},
+    {"text":"أول دولة عربية فازت بكأس أفريقيا؟","options":["مصر","الجزائر","المغرب","تونس"],"correct":0},
+    {"text":"أسرع رياضة جماعية؟","options":["الهوكي على الجليد","كرة القدم","كرة السلة","الكرة الطائرة"],"correct":0},
+    {"text":"عدد لاعبي الكرة الطائرة لكل فريق؟","options":["6","5","7","8"],"correct":0},
+    {"text":"أكثر منتخب فاز بكأس العالم؟","options":["البرازيل","ألمانيا","إيطاليا","الأرجنتين"],"correct":0},
+    {"text":"أي رياضة ارتبطت بمحمد علي كلاي؟","options":["الملاكمة","المصارعة","الكاراتيه","الجودو"],"correct":0},
+    {"text":"أسرع رجل في العالم (100م)؟","options":["يوسين بولت","كارل لويس","مايكل جونسون","غاتلين"],"correct":0},
+    {"text":"كأس ديفيس تخص رياضة؟","options":["التنس","الغولف","السباحة","الدراجات"],"correct":0},
+    {"text":"ملعب ويمبلي يوجد في؟","options":["لندن","مدريد","روما","باريس"],"correct":0},
+    {"text":"كأس آسيا لكرة القدم الأولى أُقيمت في؟","options":["هونغ كونغ","اليابان","السعودية","إيران"],"correct":0}
+  ],
+  "الحيوانات": [
+    {"text":"أضخم حيوان على وجه الأرض؟","options":["الحوت الأزرق","الفيل","القرش الحوتي","الزرافة"],"correct":0},
+    {"text":"أسرع حيوان بري؟","options":["الفهد","الأسد","الغزال","الذئب"],"correct":0},
+    {"text":"أكبر طائر في العالم؟","options":["النعامة","العقاب","البطريق","الكوندور"],"correct":0},
+    {"text":"الحيوان الذي يلقب بسفينة الصحراء؟","options":["الجمل","الحصان","الزرافة","الماعز"],"correct":0},
+    {"text":"أصغر طائر في العالم؟","options":["طائر الطنان","الدوري","السنونو","الكناري"],"correct":0},
+    {"text":"الحيوان الوحيد الذي لا يستطيع القفز؟","options":["الفيل","وحيد القرن","فرس النهر","السلحفاة"],"correct":0},
+    {"text":"أين يعيش دب الباندا؟","options":["الصين","الهند","اليابان","منغوليا"],"correct":0},
+    {"text":"أي حيوان يغير لون جلده؟","options":["الحرباء","الضفدع","السمك","التمساح"],"correct":0},
+    {"text":"حيوان ثديي يطير؟","options":["الخفاش","البومة","النسر","الطائر الطنان"],"correct":0},
+    {"text":"كم عدد قلوب الأخطبوط؟","options":["3","1","2","4"],"correct":0},
+    {"text":"أسرع طائر في الطيران؟","options":["الشاهين","النسر","العقاب","البومة"],"correct":0},
+    {"text":"الحيوان الذي ينام واقفًا؟","options":["الحصان","الجمل","الفيل","البقرة"],"correct":0},
+    {"text":"أكبر قرد في العالم؟","options":["الغوريلا","الشمبانزي","إنسان الغاب","البابون"],"correct":0},
+    {"text":"أي حيوان يملك أطول عمر؟","options":["السلحفاة","الحوت الأزرق","الفيل","البجع"],"correct":0},
+    {"text":"الحيوان الذي يستخدم صدى الصوت لتحديد موقعه؟","options":["الخفاش","الدولفين","الحوت","الطيور"],"correct":0}
+  ],
+  "السينما": [
+    {"text":"من مخرج فيلم الأرض (1970)؟","options":["يوسف شاهين","صلاح أبو سيف","حسين كمال","عاطف الطيب"],"correct":0},
+    {"text":"أول فيلم عربي ناطق؟","options":["أولاد الذوات","وداد","زينب","العزيمة"],"correct":0},
+    {"text":"فيلم المومياء (1969) أخرجه؟","options":["شادي عبد السلام","يوسف شاهين","بركات","عاطف الطيب"],"correct":0},
+    {"text":"من بطل فيلم باب الحديد؟","options":["يوسف شاهين","فريد شوقي","شكري سرحان","عمر الشريف"],"correct":0},
+    {"text":"أول ممثلة مصرية حصلت على جائزة دولية؟","options":["فاتن حمامة","شادية","هند رستم","ماجدة"],"correct":0},
+    {"text":"فيلم الكيت كات من إخراج؟","options":["داوود عبد السيد","عاطف الطيب","محمد خان","علي بدرخان"],"correct":0},
+    {"text":"فيلم العزيمة يعتبر من؟","options":["أوائل الواقعية","أفلام كوميدية","استعراضية","خيالية"],"correct":0},
+    {"text":"فيلم دعاء الكروان مأخوذ عن رواية لـ؟","options":["طه حسين","نجيب محفوظ","توفيق الحكيم","عباس العقاد"],"correct":0},
+    {"text":"من مخرج فيلم الكيت كات؟","options":["داوود عبد السيد","يوسف شاهين","محمد خان","علي بدرخان"],"correct":0},
+    {"text":"فيلم الناصر صلاح الدين من إخراج؟","options":["يوسف شاهين","بركات","هنري بركات","توفيق صالح"],"correct":0},
+    {"text":"من بطل فيلم إسكندرية ليه؟","options":["محسن محيي الدين","أحمد زكي","نور الشريف","حسين فهمي"],"correct":0},
+    {"text":"فيلم بين القصرين مأخوذ عن رواية لـ؟","options":["نجيب محفوظ","يوسف إدريس","إحسان عبد القدوس","توفيق الحكيم"],"correct":0},
+    {"text":"أول مهرجان سينمائي عربي؟","options":["مهرجان القاهرة","مهرجان دمشق","مهرجان قرطاج","مهرجان دبي"],"correct":0},
+    {"text":"فيلم اللص والكلاب مأخوذ عن رواية لـ؟","options":["نجيب محفوظ","إحسان عبد القدوس","يوسف إدريس","توفيق الحكيم"],"correct":0},
+    {"text":"أول فيلم مصري بالألوان؟","options":["بابا عريس","رد قلبي","دعاء الكروان","وداد"],"correct":0}
+  ],
+  "الموسيقى ": [
+    {"text":"مقام الراست يبدأ من؟","options":["دو","ري","مي","فا"],"correct":0},
+    {"text":"آلة القانون تنتمي لعائلة؟","options":["الأوتار","النفخ","الإيقاع","الإلكترونية"],"correct":0},
+    {"text":"أي موسيقي لُقب بموسيقار الأجيال؟","options":["محمد عبد الوهاب","سيد درويش","رياض السنباطي","بليغ حمدي"],"correct":0},
+    {"text":"أم كلثوم تُعرف بلقب؟","options":["كوكب الشرق","سيدة الغناء العربي","القيصرة","شمس الأغنية"],"correct":0},
+    {"text":"أي آلة موسيقية تُسمى العود الغربي؟","options":["الغيتار","الكمان","الناي","البزق"],"correct":0},
+    {"text":"أول من أدخل البوليفونية في الموسيقى العربية؟","options":["محمد عبد الوهاب","سيد درويش","زكريا أحمد","السنباطي"],"correct":0},
+    {"text":"مقام الحجاز يبدأ على درجة؟","options":["ري","مي","فا","لا"],"correct":0},
+    {"text":"أي آلة موسيقية عربية تشبه الهارب؟","options":["القانون","الناي","العود","الربابة"],"correct":0},
+    {"text":"سيد درويش لُقب بـ؟","options":["أبو المسرح الغنائي","موسيقار الأجيال","بلبل الشرق","عميد الموسيقى"],"correct":0},
+    {"text":"آلة الناي تصنع غالبًا من؟","options":["القصب","الخشب","المعدن","البلاستيك"],"correct":0},
+    {"text":"أي مقام يُستخدم في الأذان؟","options":["الحجاز","السيكاه","النهاوند","الراست"],"correct":0},
+    {"text":"بليغ حمدي اشتهر كـ؟","options":["ملحن","شاعر","مغنٍ","عازف"],"correct":0},
+    {"text":"آلة الطرب التقليدية في البادية؟","options":["الربابة","الناي","الطبل","القيثارة"],"correct":0},
+    {"text":"أول موسيقي عربي دخل دار الأوبرا في باريس؟","options":["محمد عبد الوهاب","فريد الأطرش","رياض السنباطي","سيد درويش"],"correct":0},
+    {"text":"أي مقام موسيقي يبدأ بدرجتي نصف بُعد؟","options":["السيكاه","الراست","النهاوند","العجم"],"correct":0}
+  ],
+  "الطبيعة": [
+    {"text":"أطول نهر في أوروبا؟","options":["الفولغا","الدانوب","الراين","السين"],"correct":0},
+    {"text":"أعلى شلال في العالم؟","options":["شلال أنجل","شلال نياجارا","شلال فيكتوريا","شلال إغوازو"],"correct":0},
+    {"text":"أكبر صحراء في العالم؟","options":["الصحراء الكبرى","غوبي","أتاكاما","كالهاري"],"correct":0},
+    {"text":"أين يقع جبل كليمنجارو؟","options":["تنزانيا","كينيا","أوغندا","رواندا"],"correct":0},
+    {"text":"أعمق محيط في العالم؟","options":["الهادئ","الأطلسي","الهندي","الجنوبي"],"correct":0},
+    {"text":"ما اسم الرياح الموسمية في الهند؟","options":["المونسون","الهارمتان","الخماسين","السيبيري"],"correct":0},
+    {"text":"البحر الميت يتميز بـ؟","options":["ملوحته العالية","برودته","مياهه العذبة","أسماكه الكبيرة"],"correct":0},
+    {"text":"أي جزر تقع بين آسيا وأستراليا؟","options":["جزر إندونيسيا","المالديف","هاواي","جزر الكناري"],"correct":0},
+    {"text":"أعلى قمة جبلية في أفريقيا؟","options":["كليمنجارو","الأطلس","دراكنزبرغ","الرويزي"],"correct":0},
+    {"text":"ظاهرة إل نينيو مرتبطة بـ؟","options":["المحيط الهادئ","الأطلسي","الهندي","الجنوبي"],"correct":0},
+    {"text":"ما هو أعمق وادٍ في العالم؟","options":["وادي كولكا","غراند كانيون","وادي رم","وادي الموت"],"correct":0},
+    {"text":"الغابة الاستوائية الكبرى في العالم؟","options":["الأمازون","الكونغو","بورنيو","سومطرة"],"correct":0},
+    {"text":"أكبر بحيرة عذبة في العالم؟","options":["بحيرة بايكال","فيكتوريا","تانجانيقا","سوبيريور"],"correct":0},
+    {"text":"أي جزر تقع بالمحيط الهندي وتشتهر بالسياحة؟","options":["المالديف","جزر الكناري","هاواي","كوبا"],"correct":0},
+    {"text":"أي بركان دمّر مدينة بومبي القديمة؟","options":["فيزوف","إتنا","كراكاتوا","سانت هيلين"],"correct":0}
+  ],
+  "الأدب ": [
+    {"text":"مؤلف كتاب الأغاني؟","options":["أبو الفرج الأصفهاني","الجاحظ","المتنبي","ابن خلدون"],"correct":0},
+    {"text":"شاعر المعلقات الذي قُتل غدرًا؟","options":["طرفة بن العبد","زهير بن أبي سلمى","عنترة بن شداد","امرؤ القيس"],"correct":0},
+    {"text":"من هو أمير الشعراء؟","options":["أحمد شوقي","حافظ إبراهيم","المتنبي","محمود درويش"],"correct":0},
+    {"text":"مؤلف كتاب نهج البلاغة؟","options":["الشريف الرضي","علي بن أبي طالب","الجاحظ","ابن المقفع"],"correct":0},
+    {"text":"من كتب رواية اللص والكلاب؟","options":["نجيب محفوظ","يوسف إدريس","الطيب صالح","إحسان عبد القدوس"],"correct":0},
+    {"text":"جبران خليل جبران كتب؟","options":["النبي","المواكب","الأجنحة المتكسرة","كل ما سبق"],"correct":3},
+    {"text":"من كتب مسرحية مأساة الحلاج؟","options":["صلاح عبد الصبور","توفيق الحكيم","يوسف إدريس","السياب"],"correct":0},
+    {"text":"أي شاعر لقب ببحر الشعر؟","options":["المتنبي","أبو تمام","البحتري","زهير"],"correct":0},
+    {"text":"من كتب رجال في الشمس؟","options":["غسان كنفاني","إميل حبيبي","جبرا إبراهيم جبرا","نزار قباني"],"correct":0},
+    {"text":"الأيام كتاب سيرة ذاتية لـ؟","options":["طه حسين","العقاد","المنفلوطي","مصطفى لطفي"],"correct":0},
+    {"text":"شاعر فلسطيني معاصر كتب جدارية؟","options":["محمود درويش","سميح القاسم","نزار قباني","أدونيس"],"correct":0},
+    {"text":"من كتب عودة الروح؟","options":["توفيق الحكيم","العقاد","نجيب محفوظ","أحمد شوقي"],"correct":0},
+    {"text":"شاعر عباسي لقب بمتنبي العصر؟","options":["أبو الطيب المتنبي","أبو العلاء المعري","أبو نواس","البحتري"],"correct":0},
+    {"text":"من كتب موسم الهجرة إلى الشمال؟","options":["الطيب صالح","الطاهر بن جلون","نجيب محفوظ","جبرا إبراهيم جبرا"],"correct":0},
+    {"text":"كتاب البخلاء ألفه؟","options":["الجاحظ","ابن المقفع","أبو الفرج","ابن خلدون"],"correct":0}
+  ],
+  "ثقافة عامة": [
+    {"text":"أول دولة استخدمت الطباعة؟","options":["الصين","ألمانيا","مصر","اليابان"],"correct":0},
+    {"text":"أول دولة عرفت الديمقراطية؟","options":["اليونان","روما","فرنسا","إنجلترا"],"correct":0},
+    {"text":"أكبر قارة مساحة؟","options":["آسيا","أفريقيا","أمريكا الشمالية","أوروبا"],"correct":0},
+    {"text":"عاصمة كندا؟","options":["أوتاوا","تورونتو","فانكوفر","مونتريال"],"correct":0},
+    {"text":"كم عدد كواكب المجموعة الشمسية؟","options":["8","9","7","6"],"correct":0},
+    {"text":"أي معدن يُعرف بالذهب الأبيض؟","options":["البلاتين","الفضة","الألماس","القصدير"],"correct":0},
+    {"text":"أكبر دولة في العالم سكانًا؟","options":["الصين","الهند","الولايات المتحدة","إندونيسيا"],"correct":0},
+    {"text":"في أي سنة تأسست الأمم المتحدة؟","options":["1945","1939","1918","1950"],"correct":0},
+    {"text":"أي كوكب يُعرف بالكوكب العملاق الغازي؟","options":["المشتري","زحل","أورانوس","نبتون"],"correct":0},
+    {"text":"أول من اكتشف البنسلين؟","options":["ألكسندر فليمنغ","باستير","كوري","لويس"],"correct":0},
+    {"text":"ما هي لغة البرازيل الرسمية؟","options":["البرتغالية","الإسبانية","الإنجليزية","الفرنسية"],"correct":0},
+    {"text":"أي محيط يطل على سواحل أستراليا الغربية؟","options":["المحيط الهندي","الأطلسي","الهادئ","الجنوبي"],"correct":0},
+    {"text":"أول دولة أطلقت إنسانًا إلى الفضاء؟","options":["الاتحاد السوفيتي","الولايات المتحدة","الصين","فرنسا"],"correct":0},
+    {"text":"أي حيوان يُلقب بملك الغابة؟","options":["الأسد","النمر","الفهد","الضبع"],"correct":0},
+    {"text":"أصغر قارة في العالم؟","options":["أستراليا","أوروبا","أمريكا الجنوبية","أنتاركتيكا"],"correct":0}
+  ]
+}
+
+let currentCat='', qIndex=0, roundQs=[];
+let goodCount=0, errorCount=0;
+
+/* العدادات تظهر دائمًا وتبدأ بصفر */
+function resetBadges(){
+  goodCount=0; errorCount=0;
+  goodBadge.textContent='0'; errorBadge.textContent='0';
+  goodBadge.style.display='flex'; errorBadge.style.display='flex';
+}
+
+function startCategory(cat){
+  currentCat=cat; qIndex=0; resetBadges();
+  wheelSection.classList.remove("active"); wheelSection.style.display="none";
+  quizSection.classList.add("active");     quizSection.style.display="block";
+  roundQs=(pool[cat]||[]).slice(0,15);
+  renderQuestion();
+}
+
+function renderQuestion(){
+  const q=roundQs[qIndex]; if(!q){ endRound(); return; }
+  qCounter.textContent=`${currentCat} — السؤال ${qIndex+1} / ${roundQs.length||1}`;
+  qBox.textContent=q.text; answersDiv.innerHTML='';
+  const labels=['A','B','C','D'];
+  const order=[0,1,2,3].sort(()=>Math.random()-0.5);
+  const correctDisplay = order.indexOf(q.correct);
+
+  order.forEach((orig,disp)=>{
+    const d=document.createElement('div'); d.className='answer';
+    d.innerHTML=`<strong>${labels[disp]}</strong> ${q.options[orig]}`;
+    d.onclick=()=>{
+      if([...answersDiv.children].some(el=>el.classList.contains('correct')||el.classList.contains('wrong')))return;
+      if(disp===correctDisplay){
+        d.classList.add('correct');
+        goodCount++; goodBadge.textContent=String(goodCount);
+      }else{
+        d.classList.add('wrong');
+        answersDiv.children[correctDisplay].classList.add('correct');
+        errorCount++; errorBadge.textContent=String(errorCount);
+      }
+    };
+    answersDiv.appendChild(d);
+  });
+}
+
+/* أزرار التحكم */
+nextBtn.onclick=()=>{ qIndex++; if(qIndex>=roundQs.length) endRound(); else renderQuestion(); };
+fiftyBtn.onclick=()=>{ if(fiftyBtn.classList.contains('used'))return; fiftyBtn.classList.add('used');
+  [0,1,2,3].sort(()=>Math.random()-0.5).slice(0,2).forEach(i=>{ if(answersDiv.children[i]) answersDiv.children[i].style.visibility='hidden'; });
+};
+
+/* === التعديل على زر التبديل === */
+switchBtn.onclick=()=>{
+  if(switchBtn.classList.contains('used')) return;
+  switchBtn.classList.add('used');
+
+  // اختر تصنيف عشوائي غير الحالي
+  const otherCats = Object.keys(pool).filter(c => c !== currentCat);
+  if(otherCats.length === 0) return;
+
+  const newCat = otherCats[Math.floor(Math.random() * otherCats.length)];
+  const newQs = pool[newCat];
+  if(newQs && newQs.length > 0){
+    const randQ = newQs[Math.floor(Math.random() * newQs.length)];
+    roundQs[qIndex] = randQ; // استبدال السؤال الحالي فقط
+  }
+  renderQuestion(); // نفس رقم السؤال
+};
+
+audienceBtn.onclick=()=>{ if(audienceBtn.classList.contains('used'))return; audienceBtn.classList.add('used'); alert('تلميح الجمهور: ركّز على الإجابة الأكثر منطقية.'); };
+
+/* نهاية الجولة */
+function endRound(){
+  quizSection.classList.remove('active'); quizSection.style.display='none';
+  wheelSection.classList.add('active');   wheelSection.style.display='flex';
+  drawWheel(lastAngle);
+}
+
+/* مؤقّت 7 دقائق — نقرة تشغيل/إيقاف — دبل كليك +30 ثانية */
+let timer=420, running=false, intId=null, lastTap=0;
+function updateTimer(){ const m=String(Math.floor(timer/60)).padStart(2,'0'); const s=String(timer%60).padStart(2,'0'); timerBtn.textContent=`${m}:${s}`; }
+function startTimer(){ stopTimer(); intId=setInterval(()=>{ if(timer>0){ timer--; updateTimer(); } },1000); }
+function stopTimer(){ if(intId){ clearInterval(intId); intId=null; } }
+function resetTimer(){ stopTimer(); timer=420; updateTimer(); }
+updateTimer();
+timerBtn.addEventListener('click',(ev)=>{
+  ev.preventDefault();
+  const now=Date.now();
+  if(now-lastTap<300){ timer+=30; updateTimer(); lastTap=0; return; }
+  lastTap=now;
+  running=!running; if(running) startTimer(); else stopTimer();
+});
+</script>
+
+</body>
+</html>
